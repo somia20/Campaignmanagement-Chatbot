@@ -15,6 +15,30 @@ def call_groq_api(messages: list) -> str:
         return response.choices[0].message.content
     except Exception as e:
         raise Exception(f"Groq API error: {str(e)}")
+    
+def generate_completion_response(action: str, context: Dict[str, Any]) -> str:
+    previous_messages = context.get('messages', [])
+    conversation_history = json.dumps(previous_messages)
+    
+    messages = [
+        {
+            "role": "system", 
+            "content": """Return only the completion message with no introductory phrases or meta-text. The message should:
+            - Be exactly two lines
+            - Start directly with the confirmation
+            - Not include phrases like 'Here is' or 'This is'
+            - Not repeat the message
+            Format: Return just the quoted message with no other text."""
+        },
+        {
+            "role": "user",
+            "content": f"""Action: {action}
+            Conversation history: {conversation_history}
+            Create a completion message for the user."""
+        }
+    ]
+    return call_groq_api(messages)
+
 
 def generate_nlp_response(missing_field: str, context: Dict[str, Any]) -> str:
     previous_messages = context.get('messages', [])
@@ -58,10 +82,16 @@ class ManagerAgent:
         missing_fields = [field for field, value in current_state['plan'].items() if not value]
 
         if not missing_fields:
+            # Generate dynamic completion message
+            completion_response = generate_completion_response(
+                current_state['action'], 
+                current_state
+            )
             current_state['output'] = "Complete"
+            print("completion_response----------------->",completion_response)
             return {
                 'updated_state': {state_id: current_state},
-                'response': "All information collected!",
+                'response': completion_response,
                 'complete': True
             }
 
